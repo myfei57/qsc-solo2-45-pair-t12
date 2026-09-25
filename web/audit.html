@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>记录</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; background: #0f1720; color: #dfe7ef; }
+    nav a { color: #7fc4ff; margin-right: 14px; text-decoration: none; }
+    section { background: #18222e; border: 1px solid #26333f; border-radius: 8px; padding: 12px; margin-top: 14px; }
+    h2 { font-size: 14px; margin: 0 0 10px; color: #9fb3c8; }
+    input { background: #101a24; color: #dfe7ef; border: 1px solid #2c3a48; border-radius: 5px; padding: 4px 6px; width: 140px; margin-right: 6px; }
+    button { background: #24405a; color: #dfe7ef; border: 1px solid #35506b; border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+    table { border-collapse: collapse; width: 100%; font-size: 12px; }
+    th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid #26333f; }
+    pre { background: #101a24; padding: 10px; border-radius: 6px; overflow: auto; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>运行记录</h1>
+  <nav>
+    <a href="/">总览</a>
+    <a href="/operations.html">操作</a>
+    <a href="/lines.html">测线</a>
+    <a href="/audit.html">记录</a>
+  </nav>
+  <section>
+    <h2>过滤</h2>
+    <label>主题 <input id="topic" value=""></label>
+    <label>最小序号 <input id="min-seq" type="number" value="0"></label>
+    <label>代际下限 <input id="min-generation" type="number" value="0"></label>
+    <label>条数 <input id="limit" type="number" value="50"></label>
+    <button id="apply">查询</button>
+    <button id="summary">汇总</button>
+  </section>
+  <section>
+    <h2>事件</h2>
+    <table id="events">
+      <thead><tr><th>#</th><th>标识</th><th>主题</th><th>tick</th><th>代际</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+  <section>
+    <h2>汇总</h2>
+    <pre id="summary-out"></pre>
+  </section>
+  <script>
+    const query = () => {
+      const params = new URLSearchParams();
+      const topic = document.getElementById("topic").value;
+      if (topic) params.set("topic", topic);
+      params.set("min_seq", document.getElementById("min-seq").value);
+      params.set("min_generation", document.getElementById("min-generation").value);
+      params.set("limit", document.getElementById("limit").value);
+      return params.toString();
+    };
+    const load = async () => {
+      const payload = await (await fetch(`/api/audit?${query()}`)).json();
+      const body = document.querySelector("#events tbody");
+      body.innerHTML = "";
+      for (const record of payload.records) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${record.seq}</td><td>${record.record_id}</td>` +
+          `<td>${record.topic}</td><td>${record.tick}</td><td>${record.generation}</td>`;
+        body.appendChild(tr);
+      }
+    };
+    document.getElementById("apply").addEventListener("click", load);
+    document.getElementById("summary").addEventListener("click", async () => {
+      const payload = await (await fetch("/api/audit/summary")).json();
+      document.getElementById("summary-out").textContent =
+        JSON.stringify(payload, null, 2);
+    });
+    load();
+  </script>
+</body>
+</html>

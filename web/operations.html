@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>操作</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; background: #0f1720; color: #dfe7ef; }
+    nav a { color: #7fc4ff; margin-right: 14px; text-decoration: none; }
+    section { background: #18222e; border: 1px solid #26333f; border-radius: 8px; padding: 12px; margin-top: 14px; }
+    h2 { font-size: 14px; margin: 0 0 10px; color: #9fb3c8; }
+    button { background: #24405a; color: #dfe7ef; border: 1px solid #35506b; border-radius: 6px; padding: 6px 12px; margin: 2px 6px 2px 0; cursor: pointer; }
+    input { background: #101a24; color: #dfe7ef; border: 1px solid #2c3a48; border-radius: 5px; padding: 4px 6px; width: 110px; margin-right: 6px; }
+    pre { background: #101a24; padding: 10px; border-radius: 6px; overflow: auto; font-size: 12px; max-height: 320px; }
+  </style>
+</head>
+<body>
+  <h1>操作台</h1>
+  <nav>
+    <a href="/">总览</a>
+    <a href="/operations.html">操作</a>
+    <a href="/lines.html">测线</a>
+    <a href="/audit.html">记录</a>
+  </nav>
+  <section>
+    <h2>吸排泥顺序</h2>
+    <label>下放深度 <input id="depth" type="number" value="9"></label>
+    <button data-post="/api/pump/persist">泵状态落盘</button>
+    <button data-post="/api/jet/open">开冲水</button>
+    <button data-post="/api/pump/start">启泵</button>
+    <button data-post="/api/drag/lower" data-body="depth">下放绞吸臂</button>
+    <button data-post="/api/hopper/gate">开泥门</button>
+    <button data-post="/api/valve/sea">开海水阀</button>
+    <button data-post="/api/overflow/close">关溢流门</button>
+    <button data-post="/api/pump/stop">停泵</button>
+    <button data-post="/api/drag/lift">提升绞吸臂</button>
+  </section>
+  <section>
+    <h2>标定与确认单</h2>
+    <label>基线 <input id="baseline" type="number" value="1050"></label>
+    <label>Ttl <input id="ttl" type="number" value="20"></label>
+    <button id="issue-dens">签发确认单</button>
+    <button id="calibrate">执行标定</button>
+    <button data-post="/api/dens/probe/replace">更换探头</button>
+    <div id="confirmation" style="margin-top:8px;font-size:13px"></div>
+  </section>
+  <section>
+    <h2>返回</h2>
+    <pre id="out"></pre>
+  </section>
+  <script>
+    const out = document.getElementById("out");
+    let densConfirmation = "";
+    const show = (label, value) => {
+      out.textContent = label + "\n" + JSON.stringify(value, null, 2) + "\n\n" + out.textContent;
+    };
+    const post = async (path, body) => {
+      const response = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body || {})
+      });
+      show(path, await response.json());
+    };
+    document.querySelectorAll("button[data-post]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const body = {};
+        const field = button.dataset.body;
+        if (field) body[field] = Number(document.getElementById(field).value);
+        post(button.dataset.post, body);
+      });
+    });
+    document.getElementById("issue-dens").addEventListener("click", async () => {
+      const response = await fetch("/api/confirmation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "dens.baseline",
+          subject: "dens",
+          ttl_ticks: Number(document.getElementById("ttl").value)
+        })
+      });
+      const row = await response.json();
+      densConfirmation = row.confirmation_id;
+      document.getElementById("confirmation").textContent =
+        `确认单 ${row.confirmation_id} 代际 ${row.generation}`;
+      show("/api/confirmation", row);
+    });
+    document.getElementById("calibrate").addEventListener("click", () => {
+      post("/api/dens/calibrate", {
+        baseline: Number(document.getElementById("baseline").value),
+        confirmation_id: densConfirmation
+      });
+    });
+  </script>
+</body>
+</html>

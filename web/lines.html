@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>测线</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; background: #0f1720; color: #dfe7ef; }
+    nav a { color: #7fc4ff; margin-right: 14px; text-decoration: none; }
+    section { background: #18222e; border: 1px solid #26333f; border-radius: 8px; padding: 12px; margin-top: 14px; }
+    h2 { font-size: 14px; margin: 0 0 10px; color: #9fb3c8; }
+    button { background: #24405a; color: #dfe7ef; border: 1px solid #35506b; border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+    input { background: #101a24; color: #dfe7ef; border: 1px solid #2c3a48; border-radius: 5px; padding: 4px 6px; width: 120px; margin-right: 6px; }
+    pre { background: #101a24; padding: 10px; border-radius: 6px; overflow: auto; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>测线</h1>
+  <nav>
+    <a href="/">总览</a>
+    <a href="/operations.html">操作</a>
+    <a href="/lines.html">测线</a>
+    <a href="/audit.html">记录</a>
+  </nav>
+  <section>
+    <h2>跑线</h2>
+    <label>线号 <input id="line-id" value="L-101"></label>
+    <label>实测长度 <input id="line-length" type="number" value="128.5"></label>
+    <button id="next">开下一条</button>
+    <button id="done">结束当前线</button>
+  </section>
+  <section>
+    <h2>轨道与结果</h2>
+    <pre id="track"></pre>
+    <pre id="results"></pre>
+  </section>
+  <script>
+    const show = (id, value) => {
+      document.getElementById(id).textContent = JSON.stringify(value, null, 2);
+    };
+    const post = async (path, body) => {
+      const response = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      return response.json();
+    };
+    document.getElementById("next").addEventListener("click", async () => {
+      show("track", await post("/api/pos/line/next", {
+        id: document.getElementById("line-id").value
+      }));
+    });
+    document.getElementById("done").addEventListener("click", async () => {
+      await post("/api/pos/line/done", {
+        length: Number(document.getElementById("line-length").value)
+      });
+      show("results", await (await fetch("/api/pos/results")).json());
+    });
+    const refresh = async () => {
+      show("track", await (await fetch("/api/pos/track")).json());
+    };
+    refresh();
+    setInterval(refresh, 4000);
+  </script>
+</body>
+</html>
