@@ -52,8 +52,8 @@ class AuditService:
             records = records[:limit]
         return records
 
-    def summary(self) -> dict[str, Any]:
-        return summary.summarize(self._log.records())
+    def summary(self, watermark: int | None = None) -> dict[str, Any]:
+        return summary.summarize(self._log.records(), watermark)
 
     def count(self, topic: str) -> int:
         return self._log.count(topic)

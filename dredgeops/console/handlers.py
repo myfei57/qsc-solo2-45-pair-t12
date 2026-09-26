@@ -101,7 +101,8 @@ def audit(console: Any, request: Request) -> Response:
 
 def audit_summary(console: Any, request: Request) -> Response:
     service = console.services.audit
-    summary = service.summary()
+    watermark = request.param("watermark")
+    summary = service.summary(None if watermark is None else int(watermark))
     summary["sequence"] = service.sequence
     return json_response(summary)
 

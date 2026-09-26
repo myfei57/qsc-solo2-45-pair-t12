@@ -36,4 +36,4 @@ class CommittedView:
         return {key: entry.value for key, entry in self._rows.items()}
 
     def digest(self) -> str:
-        return digest_rows(self.rows())
+        return digest_rows(self.rows(), self._watermark)

@@ -8,6 +8,7 @@ from typing import Any, Mapping
 class ControlState:
     tick: int
     committed_keys: int
+    watermark: int
     events: int
     subsystems: Mapping[str, Any]
 
@@ -15,6 +16,7 @@ class ControlState:
         return {
             "tick": self.tick,
             "committed_keys": self.committed_keys,
+            "watermark": self.watermark,
             "events": self.events,
             "subsystems": {name: value for name, value in self.subsystems.items()},
         }

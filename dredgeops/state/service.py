@@ -3,6 +3,7 @@
 from typing import Any, Mapping, Protocol
 
 from ..clock import LogicalClock
+from ..errors import StaleArtifactError
 from ..event import Event, EventBus, topics
 from ..store import Journal
 from ..verdict import VerdictHistory
@@ -44,6 +45,7 @@ class StateService:
         return ControlState(
             tick=self._clock.tick,
             committed_keys=len(self._journal.keys()),
+            watermark=self._journal.watermark,
             events=self._bus.sequence,
             subsystems={
                 name: subsystem.view().to_dict()
@@ -54,16 +56,20 @@ class StateService:
         return counters(self._bus)
 
     def snapshot(self) -> dict[str, Any]:
-        """Freeze the committed stream and record its digest."""
+        """Freeze the committed stream and record its digest under a new generation."""
         frozen = self._journal.snapshot()
-        ref = self._artifacts.record("snapshot", SNAPSHOT_NAME, 0, frozen.digest)
+        generation = self._generations.advance(SNAPSHOT_NAME, "state-snapshot")
+        ref = self._artifacts.record(
+            "snapshot", SNAPSHOT_NAME, generation, frozen.digest, frozen.watermark
+        )
         self._bus.publish(topics.TOPIC_SNAPSHOT, frozen.watermark)
-        return {"snapshot": {"digest": frozen.digest}, "artifact": ref.to_row()}
+        return {"snapshot": frozen.to_dict(), "artifact": ref.to_row()}
     def require_snapshot(self, max_age_ticks: int = 100) -> ArtifactRef:
-        """Return the latest snapshot while it is not too old."""
+        """Return the latest snapshot while it is not superseded or too old."""
         ref = self._artifacts.get("snapshot", SNAPSHOT_NAME)
         if ref is None:
             raise StaleArtifactError("no snapshot recorded as " + SNAPSHOT_NAME)
+        self._generations.require_current(SNAPSHOT_NAME, ref.generation, "control snapshot")
         if self._clock.tick - ref.tick > max_age_ticks:
             raise StaleArtifactError("snapshot is too old")
         return ref
@@ -74,7 +80,11 @@ class StateService:
         return history.to_dict()
 
     def wire(self) -> None:
-        """Snapshots stay valid until they are replaced."""
-        return None
+        """A parameter generation moving on retires every snapshot taken before it."""
+        self._bus.subscribe(topics.TOPIC_BASELINE_INVALIDATED, self._expire_snapshot)
+        self._bus.subscribe(topics.TOPIC_BASELINE_SET, self._expire_snapshot)
+        self._bus.subscribe(topics.TOPIC_CURVE_SET, self._expire_snapshot)
+        self._bus.subscribe(topics.TOPIC_MAP_REBUILT, self._expire_snapshot)
+
     def _expire_snapshot(self, event: Event) -> None:
         self._generations.advance(SNAPSHOT_NAME, "state-snapshot-expire")

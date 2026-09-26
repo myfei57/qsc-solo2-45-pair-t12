@@ -11,9 +11,15 @@ def canonical(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
 
-def digest_rows(rows: Mapping[str, Any]) -> str:
-    """Digest of a set of committed rows."""
+def digest_rows(rows: Mapping[str, Any], watermark: int | None = None) -> str:
+    """Digest of a set of committed rows.
+
+    When a watermark is given it is folded into the digest, so identical rows at
+    different stream positions no longer look like the same snapshot.
+    """
     payload = "".join(f"{key}\x00{canonical(rows[key])}\n" for key in sorted(rows))
+    if watermark is not None:
+        payload = f"watermark\x00{watermark}\n{payload}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 

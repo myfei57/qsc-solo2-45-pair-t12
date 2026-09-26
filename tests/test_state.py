@@ -71,6 +71,31 @@ def test_snapshot_endpoint_round_trip(services, console):
     created = ok(console, "POST", "/api/state/snapshot", {})
     checked = ok(console, "GET", "/api/state/snapshot?max_age=50")
     assert checked["digest"] == created["snapshot"]["digest"]
+    assert checked["watermark"] == created["snapshot"]["watermark"]
+
+
+def test_snapshot_digest_changes_with_the_watermark_even_when_rows_match(services):
+    services.pump.persist()
+    first = services.state.snapshot()
+
+    # 覆盖同一行、但把它改成别的值再补偿回原值：行集相同，水位前进
+    batch = services.journal.new_batch("flip")
+    services.journal.open(batch)
+    services.journal.append("pump/state", {"depth": 99, "curve": {}, "tick": 0}, batch)
+    services.journal.commit(batch)
+    services.pump.persist()
+
+    second = services.state.snapshot()
+    assert second["snapshot"]["watermark"] > first["snapshot"]["watermark"]
+    assert second["snapshot"]["digest"] != first["snapshot"]["digest"]
+
+
+def test_snapshot_artifact_carries_the_watermark_it_covered(services):
+    services.pump.persist()
+    payload = services.state.snapshot()
+    watermark = payload["snapshot"]["watermark"]
+    assert payload["artifact"]["watermark"] == watermark
+    assert services.state.require_snapshot(10).watermark == watermark
 
 
 def test_counters_endpoint_lists_topics(services, console):

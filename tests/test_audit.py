@@ -54,9 +54,40 @@ def test_summary_counts_topics_and_generations(services):
     services.jet.close()
     services.jet.open_jet()
     summary = services.audit.summary()
+    assert summary["watermark"] == 3
     assert summary["total"] == 3
     assert summary["topics"]["jet.opened"] == 2
     assert summary["generations"] == {"0": 3}
+
+
+def test_summary_states_its_coverage_watermark(services):
+    services.jet.open_jet()
+    services.jet.close()
+    summary = services.audit.summary()
+    assert summary["watermark"] == services.audit.sequence == 2
+
+
+def test_summary_can_be_frozen_at_an_earlier_watermark(services, console):
+    services.jet.open_jet()
+    services.jet.close()
+    services.jet.open_jet()
+    earlier = services.audit.summary(watermark=2)
+    assert earlier["watermark"] == 2
+    assert earlier["total"] == 2
+    assert earlier["topics"] == {"jet.opened": 1, "jet.closed": 1}
+    # 超过流尾的水位夹到流尾；零水位覆盖空区间
+    assert services.audit.summary(watermark=99)["watermark"] == 3
+    assert services.audit.summary(watermark=0)["total"] == 0
+
+
+def test_summary_endpoint_reports_watermark_and_sequence(console):
+    ok(console, "POST", "/api/jet/open", {})
+    body = ok(console, "GET", "/api/audit/summary")
+    assert body["watermark"] == 1
+    assert body["sequence"] == 1
+    frozen = ok(console, "GET", "/api/audit/summary?watermark=0")
+    assert frozen["watermark"] == 0
+    assert frozen["total"] == 0
 
 
 def test_clear_empties_the_stream_but_keeps_the_sequence(services):
