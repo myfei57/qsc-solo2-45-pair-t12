@@ -18,6 +18,7 @@ class ArtifactRef:
     generation: int
     tick: int
     digest: str
+    watermark: int = 0
 
     def to_row(self) -> dict[str, Any]:
         return {
@@ -26,6 +27,7 @@ class ArtifactRef:
             "generation": self.generation,
             "tick": self.tick,
             "digest": self.digest,
+            "watermark": self.watermark,
         }
 
     @classmethod
@@ -36,6 +38,7 @@ class ArtifactRef:
             generation=int(row["generation"]),
             tick=int(row["tick"]),
             digest=str(row["digest"]),
+            watermark=int(row.get("watermark", 0)),
         )
 
 
@@ -46,13 +49,21 @@ class Artifacts:
         self._journal = journal
         self._clock = clock
 
-    def record(self, kind: str, name: str, generation: int, digest: str) -> ArtifactRef:
+    def record(
+        self,
+        kind: str,
+        name: str,
+        generation: int,
+        digest: str,
+        watermark: int = 0,
+    ) -> ArtifactRef:
         ref = ArtifactRef(
             kind=kind,
             name=name,
             generation=generation,
             tick=self._clock.tick,
             digest=digest,
+            watermark=watermark,
         )
         with self._journal.transaction(f"artifact-{kind}") as batch:
             self._journal.append(

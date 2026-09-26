@@ -38,9 +38,34 @@ def test_snapshot_freezes_the_committed_stream(services):
     services.pump.persist()
     payload = services.state.snapshot()
     assert payload["snapshot"]["watermark"] == 1
+    assert payload["snapshot"]["count"] == 1
     assert payload["artifact"]["kind"] == "snapshot"
     assert payload["artifact"]["generation"] == 1
+    assert payload["artifact"]["watermark"] == 1
     assert services.state.require_snapshot(10).digest == payload["snapshot"]["digest"]
+    assert services.state.require_snapshot(10).watermark == 1
+
+
+def test_a_new_record_is_visible_in_the_next_snapshot_range(services):
+    first = services.state.snapshot()["snapshot"]
+    services.pump.persist()
+    second = services.state.snapshot()["snapshot"]
+
+    assert first["watermark"] == 0
+    assert second["watermark"] > first["watermark"]
+    assert second["count"] > first["count"]
+    assert second["digest"] != first["digest"]
+
+
+def test_snapshot_endpoint_round_trip(services, console):
+    created = ok(console, "POST", "/api/state/snapshot", {})
+    checked = ok(console, "GET", "/api/state/snapshot?max_age=50")
+    assert checked["digest"] == created["snapshot"]["digest"]
+    assert checked["watermark"] == created["snapshot"]["watermark"]
+    services.pump.persist()
+    newer = ok(console, "POST", "/api/state/snapshot", {})
+    assert newer["snapshot"]["watermark"] > checked["watermark"]
+    assert newer["snapshot"]["digest"] != checked["digest"]
 
 
 def test_snapshot_is_refused_after_a_parameter_generation_moves(services, console):
@@ -65,12 +90,6 @@ def test_verdict_history_is_available_per_subject(services, console):
     assert payload["current"] == "high"
     assert payload["points"][0]["detail"] == "reading=1200.0"
     assert services.state.verdict_history("unknown.subject")["current"] == "unknown"
-
-
-def test_snapshot_endpoint_round_trip(services, console):
-    created = ok(console, "POST", "/api/state/snapshot", {})
-    checked = ok(console, "GET", "/api/state/snapshot?max_age=50")
-    assert checked["digest"] == created["snapshot"]["digest"]
 
 
 def test_counters_endpoint_lists_topics(services, console):

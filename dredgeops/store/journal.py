@@ -218,8 +218,14 @@ class Journal:
         return CommittedView(self._entries, limit, self._aborted)
 
     def snapshot(self) -> Snapshot:
+        """Freeze the committed prefix of the stream at the current watermark."""
         view = self.view()
-        return Snapshot(watermark=view.watermark, digest=view.digest(), keys=view.keys())
+        return Snapshot(
+            watermark=view.watermark,
+            digest=view.snapshot_digest(),
+            keys=view.keys(),
+            count=len(view.entries()),
+        )
 
     # ---------------------------------------------------------------- internals
 

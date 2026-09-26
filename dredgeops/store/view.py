@@ -3,7 +3,7 @@
 from typing import Any, Collection, Sequence
 
 from .entry import Entry, EntryKind
-from .snapshot import digest_rows
+from .snapshot import digest_entries, digest_rows
 
 
 class CommittedView:
@@ -16,10 +16,12 @@ class CommittedView:
         aborted: Collection[str] = (),
     ) -> None:
         self._watermark = watermark
+        self._visible: list[Entry] = []
         self._rows: dict[str, Entry] = {}
         for entry in entries:
             if entry.seq > watermark or entry.batch_id in aborted:
                 continue
+            self._visible.append(entry)
             if entry.kind is EntryKind.TOMBSTONE:
                 self._rows.pop(entry.key, None)
             else:
@@ -35,5 +37,13 @@ class CommittedView:
     def rows(self) -> dict[str, Any]:
         return {key: entry.value for key, entry in self._rows.items()}
 
+    def entries(self) -> tuple[Entry, ...]:
+        """Every committed row this view covers, in stream order."""
+        return tuple(self._visible)
+
     def digest(self) -> str:
         return digest_rows(self.rows())
+
+    def snapshot_digest(self) -> str:
+        """Digest of the whole covered range, not just the latest value per key."""
+        return digest_entries(self._visible)
